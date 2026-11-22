@@ -8,8 +8,11 @@ import re
 import shutil
 import time
 import uuid
+from io import BytesIO
 from dataclasses import dataclass
 from typing import Any, Awaitable, Dict, Iterable, Optional, cast
+
+from PIL import Image
 
 from ...config import config
 from ...recipes.constants import GEN_PARAM_KEYS
@@ -113,7 +116,9 @@ class RecipePersistenceService:
         is_video = extension in [".mp4", ".webm"]
         if is_video or skip_optimize:
             optimized_image = resolved_image_bytes
-            # extension is already set
+            if not is_video:
+                with Image.open(BytesIO(resolved_image_bytes)) as image:
+                    extension = {"JPEG": ".jpg", "PNG": ".png", "WEBP": ".webp"}.get(image.format) or next((ext for ext, fmt in Image.registered_extensions().items() if fmt == image.format), ".png")
         else:
             optimized_image, extension = self._exif_utils.optimize_image(
                 image_data=resolved_image_bytes,

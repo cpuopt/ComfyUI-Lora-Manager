@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from typing import Any, Callable, Optional
 
 from ...utils.utils import calculate_recipe_fingerprint
-from ...utils.civitai_utils import extract_civitai_image_id, rewrite_preview_url
+from ...utils.civitai_utils import extract_civitai_image_id
 from ...recipes.enrichment import RecipeEnricher
 from .errors import (
     RecipeDownloadError,
@@ -113,9 +113,6 @@ class RecipeAnalysisService:
         image_info: Optional[dict[str, Any]] = None
         is_video = False
         extension = ".jpg"  # Default
-        # Workflow recovered from the image. CivitAI's optimized renditions are
-        # re-encoded and carry no metadata, so for those the workflow only
-        # exists in the original rendition, fetched below for EXIF extraction.
         recovered_workflow: Optional[str] = None
         # Diagnostics collected during analysis; surfaced in the payload so
         # callers can persist an import_info block explaining empty LoRA lists.
@@ -139,19 +136,12 @@ class RecipeAnalysisService:
 
                 is_video = image_info.get("type") == "video"
 
-                # Use optimized preview URLs if possible
-                rewritten_url, _ = rewrite_preview_url(
-                    image_url, media_type=image_info.get("type")
-                )
-                if rewritten_url:
-                    image_url = rewritten_url
-
                 if is_video:
                     # Extract extension from URL
                     url_path = image_url.split("?")[0].split("#")[0]
                     extension = os.path.splitext(url_path)[1].lower() or ".mp4"
                 else:
-                    extension = ".jpg"
+                    extension = os.path.splitext(image_url.split("?")[0].split("#")[0])[1].lower() or ".jpg"
 
                 temp_path = self._create_temp_path(suffix=extension)
                 await self._download_image(image_url, temp_path)
@@ -241,35 +231,6 @@ class RecipeAnalysisService:
                 recovered_workflow = await asyncio.to_thread(
                     self._read_embedded_workflow, temp_path
                 )
-
-            # Fallback: try the original (non-optimized) image for EXIF data
-            if not exif_metadata and civitai_image_id and image_info:
-                original_url = image_info.get("url")
-                if original_url:
-                    self._logger.debug(
-                        "Optimized image lacks embedded metadata, "
-                        "falling back to original image: %s",
-                        original_url,
-                    )
-                    orig_temp_path = self._create_temp_path(suffix=".png")
-                    try:
-                        await self._download_image(original_url, orig_temp_path)
-                        exif_metadata = await asyncio.to_thread(
-                            self._exif_utils.extract_image_metadata,
-                            orig_temp_path,
-                        )
-                        # The original is also the only place a ComfyUI
-                        # workflow survives; carry it so the save step can
-                        # embed it even though the stored preview stays the
-                        # small, metadata-free optimized rendition.
-                        recovered_workflow = (
-                            await asyncio.to_thread(
-                                self._read_embedded_workflow, orig_temp_path
-                            )
-                            or recovered_workflow
-                        )
-                    finally:
-                        self._safe_cleanup(orig_temp_path)
 
             diagnostics["exif_present"] = bool(exif_metadata)
 

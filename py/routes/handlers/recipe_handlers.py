@@ -31,7 +31,6 @@ from ...utils.civitai_utils import (
     build_civitai_image_page_url,
     extract_civitai_image_id,
     extract_civitai_image_id_from_cdn_url,
-    rewrite_preview_url,
 )
 from ...utils.constants import NSFW_LEVELS
 from ...utils.directory_browser import WINDOWS_DRIVES_TOKEN, browse_directory
@@ -888,6 +887,7 @@ class RecipeManagementHandler:
                 tags=payload["tags"],
                 metadata=payload["metadata"],
                 extension=payload.get("extension"),
+                skip_optimize=True,
             )
             return web.json_response(result.payload, status=result.status)
         except RecipeValidationError as exc:
@@ -1517,6 +1517,7 @@ class RecipeManagementHandler:
             metadata=metadata,
             extension=extension,
             target_dir=target_dir,
+            skip_optimize=True,
         )
         return web.json_response(result.payload, status=result.status)
 
@@ -2117,13 +2118,7 @@ class RecipeManagementHandler:
                 if not media_url:
                     raise RecipeDownloadError("No image URL found in Civitai response")
 
-                # Use optimized preview URLs if possible
-                media_type = image_info.get("type")
-                rewritten_url, _ = rewrite_preview_url(media_url, media_type=media_type)
-                if rewritten_url:
-                    download_url = rewritten_url
-                else:
-                    download_url = media_url
+                download_url = media_url
 
             success, result = await downloader.download_file(
                 download_url, temp_path, use_auth=False
@@ -2662,6 +2657,7 @@ class RecipeManagementHandler:
             extension=extension,
             recipe_id=recipe_id,
             target_dir=target_dir,
+            skip_optimize=True,
         )
         return web.json_response(result.payload, status=result.status)
 

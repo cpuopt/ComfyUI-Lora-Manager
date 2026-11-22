@@ -669,7 +669,8 @@ class BatchImportService:
                     name=recipe_name,
                     tags=all_tags,
                     metadata=metadata,
-                    extension=payload.get("extension"),
+                    extension=payload.get("extension") if item.item_type == ImportItemType.URL else os.path.splitext(item.source)[1].lower(),
+                    skip_optimize=True,
                 )
 
                 if save_result.status == 200:
